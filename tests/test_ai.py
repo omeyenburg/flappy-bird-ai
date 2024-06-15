@@ -16,3 +16,12 @@ def test_activation_functions():
     assert a.tanh(0) == 0
     assert -1 < a.tanh(-1) < 0
     assert 0 < a.tanh(1) < 1
+
+
+def test_generation_saving():
+    assert (
+        ai.get_newest_generation(
+            ["gen5.json", "gen-1.json", "gen.json", "gen3.json", "3.txt", "1"]
+        )
+        == 5
+    )

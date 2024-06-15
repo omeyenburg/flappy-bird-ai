@@ -52,7 +52,7 @@ class Window:
 
         self.game = game.Game()
 
-    def draw(self, image, pos=(0, 0), angle=0):
+    def draw(self, image, pos=(0, 0), angle=0.0):
         surf = pygame.Surface(images[image][2:], pygame.SRCALPHA)
         surf.blit(self.atlas, (0, 0), images[image])
 
@@ -95,10 +95,10 @@ class Window:
             )
 
         # Bird
-        if self.game.bird.vel > -2:
+        if self.game.bird.yvel > -2:
             bird_angle = -20
         else:
-            bird_angle = min(90, -(self.game.bird.vel + 2) * 60 - 20)
+            bird_angle = min(90, -(self.game.bird.yvel + 2) * 60 - 20)
 
         if self.game.bird.dead:
             self.draw(
