@@ -2,14 +2,17 @@ import concurrent.futures
 import threading
 import random
 import numpy
+import time
 import json
 import os
 
 
-generation_directory: str = "gen"  # directory name of generation backups
+generation_directory: str = os.path.join(
+    os.path.split(__file__)[0], "gen"
+)  # directory name of generation backups
 num_workers: int = 8  # number of workers, not agents
-changes: int = 3  # number of changes to the weights and biases
-change_strength: float = 0.1  # amount of the changes
+changes: int = 2  # number of changes to the weights and biases
+change_strength: float = 0.05  # amount of the changes
 
 
 def get_newest_generation(files: list[str]):
@@ -38,7 +41,9 @@ def save_generation_data(data: dict):
     def save_thread(data: dict):
         os.path.isdir(generation_directory) or os.makedirs(generation_directory)
         generation = data["generation"]
-        file_name = generation_directory + "/gen" + str(generation) + ".json"
+        file_name = os.path.join(
+            generation_directory, "gen" + str(generation) + ".json"
+        )
 
         data["layers"] = data["layers"].tolist()
         data["weights"] = data["weights"].tolist()
@@ -61,7 +66,7 @@ def load():
     if generation == -1:
         return None
 
-    file_name = generation_directory + "/gen" + str(generation) + ".json"
+    file_name = os.path.join(generation_directory, "gen" + str(generation) + ".json")
     with open(file_name, "r") as fp:
         data = json.load(fp)
 
@@ -85,46 +90,24 @@ class ActivationFunction:
 
 
 class Agent:
-    # def __init__(
-    #     self, inputs: list[str], outputs: list[str], hidden: list[int], activation
-    # ):
-    #     self.inputs = inputs
-    #     self.outputs = outputs
-    #     self.layers = (len(inputs), *hidden, len(outputs))
-    #
-    #     self.values = []
-    #     self.bias = []
-    #     self.weights = []
-    #
-    #     for i, layer in enumerate(self.layers):
-    #         self.values.append(numpy.zeros(layer))
-    #         if i + 1 == len(self.layers):
-    #             continue
-    #         self.bias.append(randarray(self.layers[i + 1]))
-    #         self.weights.append(randarray((layer, self.layers[i + 1])))
-    #
-    #     self.activation = activation
-
-    def __init__(self, layers, weights, biases, activation, generation=None, ticks=0):
+    def __init__(self, layers, weights, biases, activation):
         self.layers = layers
         self.weights = weights
         self.biases = biases
         self.activation = activation
-        self.generation = generation
-        self.ticks = ticks
+        self.ticks = self.time = self.generation = 0
 
         # Construct arrays for values, biases and weights for each layer
         self.values = []
         self.biases = []
         self.weights = []
 
-        bias_index = 0
-        weight_index = 0
+        bias_index = weight_index = 0
         for i, layer in enumerate(self.layers):
             self.values.append(numpy.zeros(layer))
+
             if i + 1 == len(self.layers):
                 continue
-
             next_layer = self.layers[i + 1]
 
             layer_biases = biases[bias_index : bias_index + next_layer]
@@ -137,14 +120,6 @@ class Agent:
             self.weights.append(layer_weights)
             weight_index += layer * next_layer
 
-        # for i, layer in enumerate(self.layers):
-        #    self.values.append(numpy.zeros(layer))
-        #    if i + 1 == len(self.layers):
-        #        continue
-
-        # self.bias.append(randarray(self.layers[i + 1]))
-        # self.weights.append(randarray((layer, self.layers[i + 1])))
-
     @staticmethod
     def load():
         generation_dict = load()
@@ -154,10 +129,13 @@ class Agent:
         weights = numpy.array(generation_dict["weights"])
         biases = numpy.array(generation_dict["biases"])
         activation = ActivationFunction.__dict__[generation_dict["activation"]]
-        generation = generation_dict["generation"]
-        ticks = generation_dict["ticks"]
 
-        return Agent(layers, weights, biases, activation, generation, ticks)
+        agent = Agent(layers, weights, biases, activation)
+        agent.ticks = generation_dict["ticks"]
+        agent.time = generation_dict["time"]
+        agent.generation = generation_dict["generation"]
+
+        return agent
 
     def run(self, inputs: list[float]):
         self.ticks += 1
@@ -169,6 +147,35 @@ class Agent:
             )
 
         return self.values[-1]
+
+
+def seconds_to_str(t):
+    seconds = round(t) % 60
+    minutes = round(t / 60) % 60
+    hours = round(t / 3600) % 24
+    days = round(t / 3600 / 24)
+
+    def join_plural(number, unit):
+        if number == 1:
+            return str(number) + " " + unit
+        return str(number) + " " + unit + "s"
+
+    if days:
+        string = join_plural(days, "day")
+        if hours:
+            string += ", " + join_plural(hours, "hour")
+    elif hours:
+        string = join_plural(hours, "hour")
+        if minutes:
+            string += ", " + join_plural(minutes, "minute")
+    elif minutes:
+        string = join_plural(minutes, "minute")
+        if seconds:
+            string += ", " + join_plural(seconds, "second")
+    else:
+        string = join_plural(seconds, "second")
+
+    return string
 
 
 def worker_process(func, layers, weights, biases, activation):
@@ -200,6 +207,7 @@ class ReinforcementLearningModel:
             "layers": numpy.array([len(inputs), *hidden, len(outputs)]),
             "activation": activation,
             "ticks": 0,
+            "time": 0,
         }
 
         self.weights = []
@@ -220,6 +228,7 @@ class ReinforcementLearningModel:
         self.activation = ActivationFunction.__dict__[self.data["activation"]]
 
     def train(self):
+        last_time = time.time()
         with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
             while True:
                 self.data["generation"] += 1
@@ -260,11 +269,6 @@ class ReinforcementLearningModel:
                     + str(self.data["generation"])
                     + "; Best score: "
                     + str(results[0][1])
-                    + " ("
-                    + str(results[0][0])
-                    + "); Virtual time spent: "
-                    + str(self.data["ticks"] / 60)
-                    + " seconds"
                 )
 
                 # TODO: save generation data to file
@@ -281,4 +285,6 @@ class ReinforcementLearningModel:
                 self.weights = [self.weights[agent].copy() for agent in new_agents]
                 self.biases = [self.biases[agent].copy() for agent in new_agents]
 
-                # break  # quit after one iteration
+                t = time.time()
+                self.data["time"] += t - last_time
+                last_time = t

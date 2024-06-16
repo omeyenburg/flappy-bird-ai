@@ -14,7 +14,7 @@ class Bird:
 class Pipe:
     def __init__(self, x):
         self.x = x
-        self.y = random.randint(79, 135)
+        self.y = random.randint(80, 170)
         self.counted = False
         self.width = 26
         self.height = 47  # height of the space top and bottom pipe

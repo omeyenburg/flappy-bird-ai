@@ -3,6 +3,10 @@ import pygame.freetype
 import pygame
 import game
 import ai
+import os
+
+
+speedup = 4
 
 
 images = {
@@ -48,30 +52,16 @@ class Window:
         )
         self.pressed = False
 
-        self.atlas = pygame.image.load("sprites.png").convert_alpha()
+        sprites_path = os.path.join(os.path.split(__file__)[0], "assets", "sprites.png")
+        self.atlas = pygame.image.load(sprites_path).convert_alpha()
         self.clock = pygame.time.Clock()
         self.time = 0
         self.font = pygame.freetype.SysFont(None, 1)
 
         self.game = game.Game()
         self.agent = ai.Agent.load()
-        self.learning_time = ""
-        seconds = round(self.agent.ticks / 60) % 60
-        minutes = round(self.agent.ticks / 3600) % 60
-        hours = round(self.agent.ticks / 3600 / 60) % 24
-        days = round(self.agent.ticks / 3600 / 60 / 24)
-        if days:
-            self.learning_time = str(days) + " days "
-            if hours:
-                self.learning_time += str(hours) + " hours"
-        elif hours:
-            self.learning_time = str(hours) + " hours "
-            if minutes:
-                self.learning_time += str(minutes) + " minutes"
-        elif minutes:
-            self.learning_time = str(minutes) + " minutes "
-            if seconds:
-                self.learning_time += str(seconds) + " seconds"
+        self.real_time = ai.seconds_to_str(self.agent.time)
+        self.virtual_time = ai.seconds_to_str(self.agent.ticks / 60)
 
     def draw(self, image, pos=(0, 0), angle=0.0):
         surf = pygame.Surface(images[image][2:], pygame.SRCALPHA)
@@ -91,6 +81,10 @@ class Window:
             if event.type == pygame.QUIT:
                 pygame.quit()
                 raise SystemExit()
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                self.game.space()
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+                self.game.space()
 
         # Background
         self.draw("background", (0, 0))
@@ -143,17 +137,19 @@ class Window:
             right += images[s][2] + 1
 
         # Ai
-        pipes = {abs(pipe.x - self.game.bird.x): pipe for pipe in self.game.pipes}
-        next_pipe = pipes[min(pipes.keys())]
+        for pipe in self.game.pipes:
+            if pipe.x - self.game.bird.x > -pipe.width:
+                next_pipe = pipe
+                break
+
         inputs = [
             self.game.bird.y,
             self.game.bird.yvel,
-            next_pipe.x - self.game.bird.x,
             next_pipe.y,
         ]
         output = self.agent.run(inputs)
         if output[0] > 0.5:
-            self.game.space()
+            self.game.jump()
 
         w = self.width * self.scale // (len(self.agent.layers) + 1)
         h = max(self.agent.layers)
@@ -174,8 +170,11 @@ class Window:
                             self.window, color, pos, pos2, round(5 * weight)
                         )
 
-                pygame.draw.circle(self.window, (250, 250, 250), pos, node_size)
                 value = self.agent.values[i][j]
+                if i + 1 == len(self.agent.layers) and value > 0.49:
+                    pygame.draw.circle(self.window, (100, 250, 100), pos, node_size)
+                else:
+                    pygame.draw.circle(self.window, (250, 250, 250), pos, node_size)
                 if value > 1:
                     value = min(1, value / 200)
                 pygame.draw.circle(
@@ -184,7 +183,7 @@ class Window:
                 pygame.draw.circle(self.window, (0, 0, 0), pos, node_size, 1)
 
                 if i == 0:
-                    text = ("y", "vel", "dist", "y-pipe")[j]
+                    text = ("y", "velocity", "y-pipe")[j]
                     self.font.render_to(
                         self.window, (3, pos[1] - 5), text, (0, 0, 0), size=12
                     )
@@ -197,26 +196,25 @@ class Window:
                         size=12,
                     )
 
-        self.font.render_to(
-            self.window,
-            (3, self.height * self.scale - 40),
+        texts = (
+            "Real time: " + self.real_time,
+            "Virtual time: " + self.virtual_time,
             "Generation: " + str(self.agent.generation),
-            (0, 0, 0),
-            size=14,
         )
 
-        self.font.render_to(
-            self.window,
-            (3, self.height * self.scale - 20),
-            "Virtual learning time: " + self.learning_time,
-            (0, 0, 0),
-            size=14,
-        )
+        for i, text in enumerate(texts):
+            self.font.render_to(
+                self.window,
+                (5, self.height * self.scale - 55 - 20 * i),
+                text,
+                (0, 0, 0),
+                size=14,
+            )
 
         # Update
         self.game.tick(1 / 60)
         pygame.display.flip()
-        self.time += self.clock.tick(60) / 1000
+        self.time += self.clock.tick(60 * speedup) / 1000
 
 
 if __name__ == "__main__":
