@@ -6,7 +6,7 @@ import ai
 import os
 
 
-speedup = 4
+speedup = 1
 
 
 images = {
