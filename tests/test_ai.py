@@ -25,3 +25,13 @@ def test_generation_saving():
         )
         == 5
     )
+
+
+def test_time_conversion():
+    assert ai.seconds_to_str(1) == "1 second"
+    assert ai.seconds_to_str(2) == "2 seconds"
+    assert ai.seconds_to_str(60) == "1 minute"
+    assert ai.seconds_to_str(3600) == "1 hour"
+    assert ai.seconds_to_str(3736) == "1 hour, 2 minutes"
+    assert ai.seconds_to_str(86400) == "1 day"
+    assert ai.seconds_to_str(270000) == "3 days, 3 hours"

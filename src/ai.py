@@ -11,7 +11,7 @@ generation_directory: str = os.path.join(
     os.path.split(__file__)[0], "gen"
 )  # directory name of generation backups
 num_workers: int = 8  # number of workers, not agents
-changes: int = 2  # number of changes to the weights and biases
+changes: int = 1  # number of changes to the weights and biases
 change_strength: float = 0.05  # amount of the changes
 
 
